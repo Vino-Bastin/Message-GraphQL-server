@@ -16,3 +16,13 @@ export type ConversationParticipantPopulated =
 export interface ConversationCreatedSubscriptionPayload {
   conversationCreated: ConversationPopulated;
 }
+
+export interface ConversationUpdatedSubscriptionPayload {
+  conversationUpdated: ConversationPopulated;
+  participantsToAdd: Array<string>;
+  participantsToRemove: Array<string>;
+}
+
+export interface ConversationDeletedSubscriptionPayload {
+  conversationDeleted: ConversationPopulated;
+}
