@@ -187,7 +187,7 @@ const messageResolvers = {
         });
 
         pubsub.publish(CONVERSATION_UPDATED, {
-          conversationUpdated: updatedConversation,
+          conversationUpdated: { conversation: updatedConversation },
         });
 
         return true;

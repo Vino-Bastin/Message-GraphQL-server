@@ -20,8 +20,8 @@ const conversationTypeDefs = gql`
 
   type ConversationUpdateResponse {
     conversation: Conversation
-    addedParticipants: [String]
-    removedParticipants: [String]
+    participantsToAdd: [String]
+    participantsToRemove: [String]
   }
 
   type ConversationDeleteResponse {

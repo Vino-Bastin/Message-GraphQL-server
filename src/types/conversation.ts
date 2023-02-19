@@ -18,9 +18,11 @@ export interface ConversationCreatedSubscriptionPayload {
 }
 
 export interface ConversationUpdatedSubscriptionPayload {
-  conversationUpdated: ConversationPopulated;
-  participantsToAdd: Array<string>;
-  participantsToRemove: Array<string>;
+  conversationUpdated: {
+    conversation: ConversationPopulated;
+    participantsToAdd: Array<string>;
+    participantsToRemove: Array<string>;
+  };
 }
 
 export interface ConversationDeletedSubscriptionPayload {

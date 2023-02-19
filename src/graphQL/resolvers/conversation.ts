@@ -379,9 +379,11 @@ const conversationResolvers = {
         const updatedConversation = updateResult || deleteResult;
 
         pubsub.publish(CONVERSATION_UPDATED, {
-          conversationUpdated: updatedConversation,
-          participantsToAdd,
-          participantsToRemove,
+          conversationUpdated: {
+            conversation: updatedConversation,
+            participantsToAdd,
+            participantsToRemove,
+          },
         });
 
         return true;
@@ -470,7 +472,8 @@ const conversationResolvers = {
         ) => {
           const { session } = context;
 
-          const { participantsToAdd, participantsToRemove } = payload;
+          const { participantsToAdd, participantsToRemove } =
+            payload.conversationUpdated;
 
           // * check if user is authenticated
           if (!session || !session.user) {
@@ -482,7 +485,7 @@ const conversationResolvers = {
           }
 
           const userIsParticipant =
-            !!payload.conversationUpdated.participants.find(
+            !!payload.conversationUpdated.conversation.participants.find(
               (participant) => participant.userId === session.user.id
             );
 
