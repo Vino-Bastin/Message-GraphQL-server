@@ -14,7 +14,7 @@ export interface Session {
 }
 
 export interface ApolloGraphQLContext {
-  session: Session | null;
+  session: Session;
   prisma: PrismaClient;
   pubsub: PubSub;
 }

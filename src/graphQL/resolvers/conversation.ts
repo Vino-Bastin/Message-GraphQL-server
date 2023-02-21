@@ -14,6 +14,11 @@ import {
   CONVERSATION_UPDATED,
   CONVERSATION_DELETED,
 } from "./../../util/constant";
+import {
+  isUserPartOfConversation,
+  getValidParticipantIds,
+  isConversationExists,
+} from "../../util/functions";
 
 const conversationResolvers = {
   Query: {
@@ -23,15 +28,6 @@ const conversationResolvers = {
       context: ApolloGraphQLContext
     ): Promise<Array<ConversationPopulated>> => {
       const { session, prisma } = context;
-
-      // * check if user is authenticated
-      if (!session || !session.user) {
-        throw new GraphQLError("UnAuthorized", {
-          extensions: {
-            code: "FORBIDDEN",
-          },
-        });
-      }
 
       // * get conversations
       try {
@@ -46,13 +42,8 @@ const conversationResolvers = {
           include: conversationPopulated,
         });
       } catch (error: any) {
-        console.log(
-          "error getting conversations: ",
-          error.message,
-          "user id: ",
-          session.user.id
-        );
-        throw new GraphQLError(error.message, {
+        console.log("error getting conversations: ", error);
+        throw new GraphQLError("Error Creating Conversation", {
           extensions: {
             code: "INTERNAL_SERVER_ERROR",
           },
@@ -60,40 +51,20 @@ const conversationResolvers = {
       }
     },
   },
+
   Mutation: {
     createConversation: async (
       _parent: any,
       arg: { participantsIds: string[] },
       context: ApolloGraphQLContext
     ) => {
-      const { participantsIds } = arg;
       const { session, prisma, pubsub } = context;
 
-      // * check if user is authenticated
-      if (!session || !session.user) {
-        throw new GraphQLError("UnAuthorized", {
-          extensions: {
-            code: "FORBIDDEN",
-          },
-        });
-      }
-
       // * check if participantsIds has session.id
-      if (!participantsIds.includes(session.user.id)) {
-        participantsIds.push(session.user.id);
-      }
-
-      // * check if participantsIds length is greater than 1
-      if (participantsIds.length < 2) {
-        throw new GraphQLError(
-          "participantsIds length should be greater than 1",
-          {
-            extensions: {
-              code: "BAD_USER_INPUT",
-            },
-          }
-        );
-      }
+      const participantsIds = getValidParticipantIds(
+        arg.participantsIds,
+        session.user.id
+      );
 
       // * check if conversation already exists for given participantsIds only if participantsIds length is 2
       if (participantsIds.length === 2) {
@@ -113,6 +84,7 @@ const conversationResolvers = {
         if (conversation) {
           return {
             conversationId: conversation.id,
+            isCreated: false,
           };
         }
       }
@@ -140,10 +112,11 @@ const conversationResolvers = {
 
         return {
           conversationId: conversation.id,
+          isCreated: true,
         };
-      } catch (e) {
-        console.log("error occurred in createConversation function", e);
-        throw new GraphQLError("error occurred in createConversation function");
+      } catch (error) {
+        console.log("error occurred in createConversation function", error);
+        throw new GraphQLError("Error Creating Conversation");
       }
     },
 
@@ -155,34 +128,12 @@ const conversationResolvers = {
       const { conversationId } = arg;
       const { session, prisma } = context;
 
-      // * check if user is authenticated
-      if (!session || !session.user) {
-        throw new GraphQLError("UnAuthorized", {
-          extensions: {
-            code: "FORBIDDEN",
-          },
-        });
-      }
-
       // * check if conversation exists
-      const conversation = await prisma.conversation.findFirst({
-        where: {
-          id: conversationId,
-          participants: {
-            some: {
-              userId: session.user.id,
-            },
-          },
-        },
-      });
-
-      if (!conversation) {
-        throw new GraphQLError("Conversation not found", {
-          extensions: {
-            code: "NOT_FOUND",
-          },
-        });
-      }
+      const _ = await isConversationExists(
+        conversationId,
+        session.user.id,
+        prisma
+      );
 
       // * update conversation
       try {
@@ -200,11 +151,9 @@ const conversationResolvers = {
       } catch (error: any) {
         console.log(
           "error occurred in markConversationAsRead function: ",
-          error.message
+          error
         );
-        throw new GraphQLError(
-          "error occurred in markConversationAsRead function"
-        );
+        throw new GraphQLError("Error Marking conversation as read");
       }
     },
 
@@ -216,35 +165,12 @@ const conversationResolvers = {
       const { conversationId } = arg;
       const { session, prisma, pubsub } = context;
 
-      // * check if user is authenticated
-      if (!session || !session.user) {
-        throw new GraphQLError("UnAuthorized", {
-          extensions: {
-            code: "FORBIDDEN",
-          },
-        });
-      }
-
       // * check if conversation exists
-      const conversation = await prisma.conversation.findFirst({
-        where: {
-          id: conversationId,
-          participants: {
-            some: {
-              userId: session.user.id,
-            },
-          },
-        },
-        include: conversationPopulated,
-      });
-
-      if (!conversation) {
-        throw new GraphQLError("Conversation not found", {
-          extensions: {
-            code: "NOT_FOUND",
-          },
-        });
-      }
+      const conversation = await isConversationExists(
+        conversationId,
+        session.user.id,
+        prisma
+      );
 
       // * delete conversation
       try {
@@ -268,16 +194,13 @@ const conversationResolvers = {
 
         // * publish conversation deleted event
         pubsub.publish(CONVERSATION_DELETED, {
-          conversationDeleted: conversation,
+          conversationOnDeleted: conversation,
         });
 
         return true;
       } catch (error: any) {
-        console.log(
-          "error occurred in deleteConversation function: ",
-          error.message
-        );
-        throw new GraphQLError("error occurred in deleteConversation function");
+        console.log("error occurred in deleteConversation function: ", error);
+        throw new GraphQLError("Error Deleting Conversation");
       }
     },
 
@@ -286,38 +209,24 @@ const conversationResolvers = {
       arg: { conversationId: string; participantsIds: Array<string> },
       context: ApolloGraphQLContext
     ) => {
-      const { conversationId, participantsIds } = arg;
+      const { conversationId } = arg;
       const { session, prisma, pubsub } = context;
 
-      // * check if user is authenticated
-      if (!session || !session.user) {
-        throw new GraphQLError("UnAuthorized", {
-          extensions: {
-            code: "FORBIDDEN",
-          },
-        });
-      }
+      const participantsIds = getValidParticipantIds(
+        arg.participantsIds,
+        session.user.id
+      );
 
       // * check if conversation exists
-      const conversationParticipant =
-        await prisma.conversationParticipant.findMany({
-          where: {
-            conversationId,
-            userId: session.user.id,
-          },
-        });
-
-      if (!conversationParticipant || !conversationParticipant.length) {
-        throw new GraphQLError("Conversation not found", {
-          extensions: {
-            code: "NOT_FOUND",
-          },
-        });
-      }
+      const conversation = await isConversationExists(
+        conversationId,
+        session.user.id,
+        prisma
+      );
 
       // * existing participants
-      const existingParticipants = conversationParticipant.map(
-        (participant) => participant.userId
+      const existingParticipants = conversation.participants.map(
+        (participant) => participant.user.id
       );
 
       // * participants to be added
@@ -331,7 +240,6 @@ const conversationResolvers = {
       );
 
       // * update conversation
-
       try {
         const updateTransaction = [
           prisma.conversation.update({
@@ -392,7 +300,7 @@ const conversationResolvers = {
           "error occurred in updateConversation function: ",
           error.message
         );
-        throw new GraphQLError("error occurred in updateConversation function");
+        throw new GraphQLError("Error Updating Conversation");
       }
     },
   },
@@ -409,26 +317,14 @@ const conversationResolvers = {
           context: ApolloGraphQLContext
         ) => {
           const { session } = context;
-
-          // * check if user is authenticated
-          if (!session || !session.user) {
-            throw new GraphQLError("UnAuthorized", {
-              extensions: {
-                code: "FORBIDDEN",
-              },
-            });
-          }
-
           const { participants } = payload.conversationCreated;
 
-          return !!participants.find(
-            (participant) => participant.userId === session.user.id
-          );
+          return isUserPartOfConversation(participants, session.user.id);
         }
       ),
     },
 
-    conversationDeleted: {
+    conversationOnDeleted: {
       subscribe: withFilter(
         (_parent: any, _arg: any, context: ApolloGraphQLContext) => {
           const { pubsub } = context;
@@ -441,19 +337,9 @@ const conversationResolvers = {
           context: ApolloGraphQLContext
         ) => {
           const { session } = context;
+          const { participants } = payload.conversationOnDeleted;
 
-          // * check if user is authenticated
-          if (!session || !session.user) {
-            throw new GraphQLError("UnAuthorized", {
-              extensions: {
-                code: "FORBIDDEN",
-              },
-            });
-          }
-
-          return !!payload.conversationDeleted.participants.find(
-            (participant) => participant.userId === session.user.id
-          );
+          return isUserPartOfConversation(participants, session.user.id);
         }
       ),
     },
@@ -471,23 +357,15 @@ const conversationResolvers = {
           context: ApolloGraphQLContext
         ) => {
           const { session } = context;
+          const {
+            participantsToRemove,
+            conversation: { participants },
+          } = payload.conversationUpdated;
 
-          const { participantsToAdd, participantsToRemove } =
-            payload.conversationUpdated;
-
-          // * check if user is authenticated
-          if (!session || !session.user) {
-            throw new GraphQLError("UnAuthorized", {
-              extensions: {
-                code: "FORBIDDEN",
-              },
-            });
-          }
-
-          const userIsParticipant =
-            !!payload.conversationUpdated.conversation.participants.find(
-              (participant) => participant.userId === session.user.id
-            );
+          const userIsParticipant = isUserPartOfConversation(
+            participants,
+            session.user.id
+          );
 
           const userIsRemoved =
             participantsToRemove &&

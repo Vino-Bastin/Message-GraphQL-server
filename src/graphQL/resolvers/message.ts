@@ -11,6 +11,7 @@ import {
 } from "../../types";
 import { conversationPopulated } from "./conversation";
 import { MESSAGE_CREATED, CONVERSATION_UPDATED } from "./../../util/constant";
+import { isConversationExists } from "../../util/functions";
 
 const messageResolvers = {
   Query: {
@@ -23,43 +24,12 @@ const messageResolvers = {
       const { conversationId } = args;
       const { session, prisma } = context;
 
-      // * check if user is authenticated
-      if (!session || !session.user) {
-        throw new GraphQLError("UnAuthorized", {
-          extensions: {
-            code: "FORBIDDEN",
-          },
-        });
-      }
-
       // * check if conversation exists
-      const conversation = await prisma.conversation.findUnique({
-        where: {
-          id: conversationId,
-        },
-        include: conversationPopulated,
-      });
-
-      if (!conversation) {
-        throw new GraphQLError("Conversation not found", {
-          extensions: {
-            code: "NOT_FOUND",
-          },
-        });
-      }
-
-      // * check if user is a participant of the conversation
-      const isParticipant = conversation.participants.find(
-        (participant) => participant.userId === session.user.id
+      const _ = await isConversationExists(
+        conversationId,
+        session.user.id,
+        prisma
       );
-
-      if (!isParticipant) {
-        throw new GraphQLError("UnAuthorized", {
-          extensions: {
-            code: "FORBIDDEN",
-          },
-        });
-      }
 
       // * get messages
       try {
@@ -73,13 +43,8 @@ const messageResolvers = {
           },
         });
       } catch (error: any) {
-        console.log(
-          "error getting messages: ",
-          error.message,
-          "user id: ",
-          session.user.id
-        );
-        throw new GraphQLError(error.message, {
+        console.log("Error Getting Messages: ", error);
+        throw new GraphQLError("Error Getting Messages", {
           extensions: {
             code: "INTERNAL_SERVER_ERROR",
           },
@@ -97,48 +62,20 @@ const messageResolvers = {
       const { conversationId, content } = args;
       const { session, prisma, pubsub } = context;
 
-      // * check if user is authenticated
-      if (!session || !session.user) {
-        throw new GraphQLError("UnAuthorized", {
-          extensions: {
-            code: "FORBIDDEN",
-          },
-        });
-      }
-
       // * check if conversation exists
-      const conversation = await prisma.conversation.findUnique({
-        where: {
-          id: conversationId,
-        },
-        include: conversationPopulated,
-      });
-
-      if (!conversation) {
-        throw new GraphQLError("Conversation not found", {
-          extensions: {
-            code: "NOT_FOUND",
-          },
-        });
-      }
+      const conversation = await isConversationExists(
+        conversationId,
+        session.user.id,
+        prisma
+      );
 
       // * check if user is a participant of the conversation
-      let isParticipant: boolean = false;
-      let userParticipant: string = "";
+      let userParticipantId: string = "";
       for (let participant of conversation.participants) {
         if (participant.userId === session.user.id) {
-          isParticipant = true;
-          userParticipant = participant.id;
+          userParticipantId = participant.id;
           break;
         }
-      }
-
-      if (!isParticipant) {
-        throw new GraphQLError("UnAuthorized", {
-          extensions: {
-            code: "FORBIDDEN",
-          },
-        });
       }
 
       // * create message
@@ -161,7 +98,7 @@ const messageResolvers = {
             participants: {
               update: {
                 where: {
-                  id: userParticipant,
+                  id: userParticipantId,
                 },
                 data: {
                   hasSeenLatestMessage: true,
@@ -192,13 +129,8 @@ const messageResolvers = {
 
         return true;
       } catch (error: any) {
-        console.log(
-          "error creating message: ",
-          error.message,
-          "user id: ",
-          session.user.id
-        );
-        throw new GraphQLError(error.message, {
+        console.log("Error Creating Message: ", error);
+        throw new GraphQLError("Error creating Message", {
           extensions: {
             code: "INTERNAL_SERVER_ERROR",
           },
@@ -226,6 +158,7 @@ const messageResolvers = {
   },
 };
 
+// * message populated
 export const messagePopulated = Prisma.validator<Prisma.MessageInclude>()({
   sender: {
     select: {

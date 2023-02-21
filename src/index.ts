@@ -22,6 +22,16 @@ import { ApolloGraphQLContext, Session, SubscriptionContext } from "./types";
 // * load env variables
 dotenv.config();
 
+const testSession = {
+  user: {
+    id: "1",
+    name: "test",
+    email: "",
+    image: "",
+  },
+  expires: "",
+};
+
 const main = async () => {
   // * express app instance
   const app = express();
@@ -62,7 +72,8 @@ const main = async () => {
 
       return { session, prisma, pubsub };
     }
-    return { session: null, prisma, pubsub };
+
+    return { session: testSession, prisma, pubsub };
   };
 
   // * graphql server context

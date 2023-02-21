@@ -24,10 +24,6 @@ const conversationTypeDefs = gql`
     participantsToRemove: [String]
   }
 
-  type ConversationDeleteResponse {
-    conversationId: String
-  }
-
   type Query {
     conversations: [Conversation]
   }
@@ -60,7 +56,7 @@ const conversationTypeDefs = gql`
   }
 
   type Subscription {
-    conversationDeleted: ConversationDeleteResponse
+    conversationOnDeleted: Conversation
   }
 `;
 

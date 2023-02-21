@@ -13,14 +13,6 @@ const userResolvers = {
       const { name: searchUserName } = args;
       const { session, prisma } = context;
 
-      if (!session || !session.user) {
-        throw new GraphQLError("UnAuthorized", {
-          extensions: {
-            code: "FORBIDDEN",
-          },
-        });
-      }
-
       try {
         return await prisma.user.findMany({
           where: {
@@ -31,9 +23,9 @@ const userResolvers = {
             },
           },
         });
-      } catch (e) {
-        console.log("error occurred in searchUsers function", e);
-        throw new GraphQLError("error occurred in searchUsers function");
+      } catch (error) {
+        console.log("error occurred in searchUsers function", error);
+        throw new GraphQLError("Unable to get users");
       }
     },
   },
