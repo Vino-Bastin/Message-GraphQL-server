@@ -212,10 +212,7 @@ const conversationResolvers = {
       const { conversationId } = arg;
       const { session, prisma, pubsub } = context;
 
-      const participantsIds = getValidParticipantIds(
-        arg.participantsIds,
-        session.user.id
-      );
+      const participantsIds = arg.participantsIds;
 
       // * check if conversation exists
       const conversation = await isConversationExists(
@@ -402,6 +399,7 @@ export const conversationPopulated =
           select: {
             id: true,
             name: true,
+            image: true,
           },
         },
       },
