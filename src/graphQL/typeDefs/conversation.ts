@@ -16,6 +16,7 @@ const conversationTypeDefs = gql`
 
   type CreateConversationResponse {
     conversationId: String
+    isCreated: Boolean
   }
 
   type ConversationUpdateResponse {
