@@ -8,9 +8,13 @@ import { makeExecutableSchema } from "@graphql-tools/schema";
 import { getSession } from "next-auth/react";
 import { PubSub } from "graphql-subscriptions";
 import { PrismaClient } from "@prisma/client";
+// @ts-ignore
 import http from "http";
+// @ts-ignore
 import express, { Request } from "express";
+// @ts-ignore
 import cors from "cors";
+// @ts-ignore
 import bodyParser from "body-parser";
 import * as dotenv from "dotenv";
 
